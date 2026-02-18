@@ -6,7 +6,7 @@ A robust, full-stack MERN application designed for users to record and analyze p
 ## 🚀 Deployment
 
 * **Live Demo:** https://fenmofinance.vercel.app/
-* **Backend API: https://fenmo-b50h.onrender.com/
+* **Backend API:** https://fenmo-b50h.onrender.com/
 
 ---
 
