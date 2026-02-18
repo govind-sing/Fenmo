@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, ChartBar, List, Wallet, Search } from 'lucide-react';
+import { LogOut, ChartBar, List, Wallet, Search, Trash2, X } from 'lucide-react';
 import API from '../api';
 import ExpenseForm from '../components/ExpenseForm';
 import Analysis from '../components/Analysis';
@@ -12,6 +12,12 @@ const Dashboard = () => {
   const [view, setView] = useState('list');
   const [editItem, setEditItem] = useState(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Delete confirmation – now per transaction
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const confirmRef = useRef(null);
 
   const navigate = useNavigate();
 
@@ -25,7 +31,7 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
-  // Fetch all expenses
+  // Fetch expenses
   const fetchExpenses = useCallback(async () => {
     try {
       setIsInitialLoading(true);
@@ -42,21 +48,48 @@ const Dashboard = () => {
     if (user) fetchExpenses();
   }, [fetchExpenses, user]);
 
-  // Safe amount parsing (handles MongoDB Decimal128)
+  // Close confirmation when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (confirmingDeleteId && confirmRef.current && !confirmRef.current.contains(event.target)) {
+        setConfirmingDeleteId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [confirmingDeleteId]);
+
   const parseAmount = (amt) => {
     return parseFloat(amt?.$numberDecimal || amt || 0);
   };
 
-  // Calculate net balance
   const netBalance = expenses.reduce((acc, curr) => {
     const val = parseAmount(curr.amount);
     return curr.type === 'income' ? acc + val : acc - val;
   }, 0);
 
-  const deleteTransaction = async (id) => {
-    if (window.confirm("Delete this entry?")) {
+  const startDelete = (id) => {
+    setConfirmingDeleteId(id);
+  };
+
+  const cancelDelete = () => {
+    setConfirmingDeleteId(null);
+  };
+
+  const performDelete = async (id) => {
+    setIsDeleting(true);
+    try {
       await API.delete(`/expenses/${id}`);
+      setConfirmingDeleteId(null);
       fetchExpenses();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      // You could add error feedback here later (toast/snackbar)
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -65,24 +98,17 @@ const Dashboard = () => {
     navigate('/auth?mode=login');
   };
 
-  // Sorted + filtered expenses (newest always on top)
   const displayedExpenses = useMemo(() => {
     const sorted = [...expenses].sort((a, b) => {
-      // Primary sort: date descending (newest first)
       const dateA = a.date ? new Date(a.date).getTime() : 0;
       const dateB = b.date ? new Date(b.date).getTime() : 0;
+      if (dateB - dateA !== 0) return dateB - dateA;
 
-      if (dateB - dateA !== 0) {
-        return dateB - dateA; // newest → oldest
-      }
-
-      // Fallback: sort by _id descending (newer ObjectIds are larger)
       const idA = a._id || '';
       const idB = b._id || '';
       return idB.localeCompare(idA);
     });
 
-    // Apply search filter
     if (!searchQuery.trim()) return sorted;
 
     const query = searchQuery.toLowerCase().trim();
@@ -91,7 +117,6 @@ const Dashboard = () => {
       const description = (exp.description || '').toLowerCase();
       const category = (exp.category || '').toLowerCase();
       const type = (exp.type || 'expense').toLowerCase();
-
       return (
         description.includes(query) ||
         category.includes(query) ||
@@ -150,7 +175,7 @@ const Dashboard = () => {
               onCancelEdit={() => setEditItem(null)}
             />
 
-            {/* Search + Balance row */}
+            {/* Search + Balance */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -168,9 +193,7 @@ const Dashboard = () => {
                   Total Balance
                 </p>
                 <div
-                  className={`text-2xl font-black ₹{
-                    netBalance >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}
+                  className={`text-2xl font-black ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}
                 >
                   {netBalance < 0 ? '-' : ''}₹{Math.abs(netBalance).toFixed(2)}
                 </div>
@@ -205,55 +228,87 @@ const Dashboard = () => {
                       </td>
                     </tr>
                   ) : (
-                    displayedExpenses.map((exp) => (
-                      <tr
-                        key={exp._id}
-                        className="hover:bg-gray-50 transition border-b last:border-0"
-                      >
-                        <td className="p-4 text-sm text-gray-600">
-                          {new Date(exp.date).toLocaleDateString()}
-                        </td>
-                        <td className="p-4">
-                          <div className="font-bold text-gray-800">{exp.description}</div>
-                          <div className="text-xs text-blue-500 font-medium">{exp.category}</div>
-                        </td>
-                        <td className="p-4">
-                          <span
-                            className={`text-[10px] font-black uppercase px-2 py-1 rounded ₹{
-                              exp.type === 'income'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}
-                          >
-                            {exp.type || 'expense'}
-                          </span>
-                        </td>
-                        <td
-                          className={`p-4 text-right font-black ₹{
-                            exp.type === 'income' ? 'text-green-600' : 'text-gray-900'
+                    displayedExpenses.map((exp) => {
+                      const isConfirming = confirmingDeleteId === exp._id;
+
+                      return (
+                        <tr
+                          key={exp._id}
+                          className={`hover:bg-gray-50 transition border-b last:border-0 ${
+                            isConfirming ? 'bg-red-50' : ''
                           }`}
                         >
-                          ₹{parseAmount(exp.amount).toFixed(2)}
-                        </td>
-                        <td className="p-4 text-center space-x-3">
-                          <button
-                            onClick={() => {
-                              setEditItem(exp);
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="text-blue-500 hover:text-blue-700 text-xs font-bold underline"
+                          <td className="p-4 text-sm text-gray-600">
+                            {new Date(exp.date).toLocaleDateString()}
+                          </td>
+                          <td className="p-4">
+                            <div className="font-bold text-gray-800">{exp.description}</div>
+                            <div className="text-xs text-blue-500 font-medium">{exp.category}</div>
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`text-[10px] font-black uppercase px-2 py-1 rounded ${
+                                exp.type === 'income'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {exp.type || 'expense'}
+                            </span>
+                          </td>
+                          <td
+                            className={`p-4 text-right font-black ${
+                              exp.type === 'income' ? 'text-green-600' : 'text-gray-900'
+                            }`}
                           >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => deleteTransaction(exp._id)}
-                            className="text-red-400 hover:text-red-600 text-xs font-bold underline"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                            ₹{parseAmount(exp.amount).toFixed(2)}
+                          </td>
+                          <td className="p-4 text-center">
+                            {isConfirming ? (
+                              <div
+                                ref={confirmRef}
+                                className="inline-flex items-center gap-3 bg-white border border-red-300 rounded px-3 py-1.5 shadow-sm text-sm"
+                              >
+                                <span className="text-red-700 font-medium whitespace-nowrap">
+                                  Delete?
+                                </span>
+                                <button
+                                  onClick={() => performDelete(exp._id)}
+                                  disabled={isDeleting}
+                                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed flex items-center gap-1 text-xs font-medium"
+                                >
+                                  {isDeleting ? 'Deleting...' : 'Yes'}
+                                </button>
+                                <button
+                                  onClick={cancelDelete}
+                                  className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-x-3">
+                                <button
+                                  onClick={() => {
+                                    setEditItem(exp);
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }}
+                                  className="text-blue-500 hover:text-blue-700 text-xs font-bold underline"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => startDelete(exp._id)}
+                                  className="text-red-500 hover:text-red-700 text-xs font-bold underline"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

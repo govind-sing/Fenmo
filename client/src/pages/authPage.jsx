@@ -7,6 +7,7 @@ const AuthPage = () => {
   const navigate = useNavigate();
 
   const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'signup');
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -14,6 +15,7 @@ const AuthPage = () => {
   });
 
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Update mode if URL changes
@@ -23,7 +25,9 @@ const AuthPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -34,8 +38,18 @@ const AuthPage = () => {
       // Save user info (including token)
       localStorage.setItem('userInfo', JSON.stringify(data));
 
-      alert('Success!');
-      navigate('/dashboard'); // Redirect after login
+      // Show inline success message
+      setSuccess(
+        isLogin
+          ? 'Login successful! Redirecting...'
+          : 'Account created successfully! Redirecting...'
+      );
+
+      // Redirect after short delay
+      setTimeout(() => {
+        navigate('/');
+      }, 1500);
+
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong');
     } finally {
@@ -53,8 +67,15 @@ const AuthPage = () => {
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">
+          <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm border border-red-200">
             {error}
+          </div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="bg-green-100 text-green-700 p-3 rounded mb-4 text-sm border border-green-200">
+            {success}
           </div>
         )}
 
@@ -67,7 +88,7 @@ const AuthPage = () => {
               </label>
               <input
                 type="text"
-                className="w-full mt-1 p-2 border rounded-md focus:ring-blue-500 outline-none"
+                className="w-full mt-1 p-2 border rounded-md focus:ring-blue-500 focus:ring-2 outline-none"
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
@@ -83,12 +104,13 @@ const AuthPage = () => {
             </label>
             <input
               type="email"
-              className="w-full mt-1 p-2 border rounded-md focus:ring-blue-500 outline-none"
+              className="w-full mt-1 p-2 border rounded-md focus:ring-blue-500 focus:ring-2 outline-none"
               value={formData.email}
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
               required
+              placeholder="e.g. test@example.com"
             />
           </div>
 
@@ -98,12 +120,13 @@ const AuthPage = () => {
             </label>
             <input
               type="password"
-              className="w-full mt-1 p-2 border rounded-md focus:ring-blue-500 outline-none"
+              className="w-full mt-1 p-2 border rounded-md focus:ring-blue-500 focus:ring-2 outline-none"
               value={formData.password}
               onChange={(e) =>
                 setFormData({ ...formData, password: e.target.value })
               }
               required
+              placeholder="At least 6 characters"
             />
           </div>
 
@@ -120,7 +143,19 @@ const AuthPage = () => {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
+        {/* Development hint for testing */}
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+          <p className="font-medium mb-1">For testing / development only:</p>
+          <p>
+            You can currently use <strong>any email</strong> (e.g. <code>test@example.com</code>, <code>dummy@whatever.com</code>) 
+            and <strong>any password</strong> (min 6 chars recommended).
+          </p>
+          <p className="mt-2 text-blue-700">
+            This is temporary — real authentication rules (email verification, password strength) will come later.
+          </p>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-gray-600">
           {isLogin ? 'New user?' : 'Already have an account?'}{' '}
           <button
             onClick={() =>
