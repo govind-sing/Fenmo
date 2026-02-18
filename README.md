@@ -5,7 +5,7 @@ A robust, full-stack MERN application designed for users to record and analyze p
 
 ## 🚀 Deployment
 
-* **Live Demo:** `[[Insert Vercel Link](https://fenmofinance.vercel.app/)]`
+* **Live Demo:** https://fenmofinance.vercel.app/
 
 ---
 
