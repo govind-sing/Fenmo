@@ -1,0 +1,15 @@
+service: mern-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-south-1
+  environment:
+    MONGO_URI: mongodb+srv://govindsingh:govindsingh@fenmo.nrefw7z.mongodb.net/?appName=fenmo
+    JWT_SECRET: govindsinghsecret
+
+functions:
+  app:
+    handler: server.handler
+    events:
+      - httpApi: '*'
