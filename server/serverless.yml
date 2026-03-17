@@ -5,8 +5,8 @@ provider:
   runtime: nodejs18.x
   region: ap-south-1
   environment:
-    MONGO_URI: mongodb+srv://govindsingh:govindsingh@fenmo.nrefw7z.mongodb.net/?appName=fenmo
-    JWT_SECRET: govindsinghsecret
+    MONGO_URI: monnsdiucsiuecf
+    JWT_SECRET: icedjdoisedc
 
 functions:
   app:
